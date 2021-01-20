@@ -120,9 +120,12 @@ def get_jandan(target_page):
     pic_items = r_bs.select('div > div > div.text > p > a')
     pic_links = ['http:' + x['href'] for x in pic_items]
 
-    current_page = r_bs.find('span', class_='current-comment-page').string
-    current_page = str(current_page)
-    current_page = int(current_page[1:-1])
+    try:
+        current_page = r_bs.find('span', class_='current-comment-page').string
+        current_page = str(current_page)
+        current_page = int(current_page[1:-1])
+    except Exception:
+        current_page = 0
     return [pic_links, current_page]
 
 
@@ -308,6 +311,7 @@ if __name__ == '__main__':
         vaild_label = ['zoo', 'ooxx', 'pic', 'top']
         if arg not in vaild_label:
             arg = None
+    arg = 'top'  # for debug
     file = main(arg)
     if file:
         os.startfile(file)
