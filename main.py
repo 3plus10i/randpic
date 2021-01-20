@@ -7,7 +7,6 @@ TODO：可以尝试实现其他网站的访问。
 import time
 import requests
 from bs4 import BeautifulSoup
-# from fake_useragent import UserAgent
 import base64
 import os
 import json
@@ -45,13 +44,14 @@ def metainfo_dict(url='', label='', downloaded=False, page_num=None):
         'downloaded': downloaded,
         'page_num': page_num
     }
-    if page_num:
-        a = time.strftime('%Y%m%d')
-        a = a + '-' + str(page_num)
-        a = base64.b64encode(a.encode('utf8')).decode()
-        data['page_base64'] = a
-    else:
-        data['page_base64'] = None
+    # 暂时没什么用
+    # if page_num:
+    #     a = time.strftime('%Y%m%d')
+    #     a = a + '-' + str(page_num)
+    #     a = base64.b64encode(a.encode('utf8')).decode()
+    #     data['page_base64'] = a
+    # else:
+    #     data['page_base64'] = None
     return data
 
 
@@ -70,17 +70,6 @@ def write_log(filename, data, mode='w'):
                 f.write(json.dumps(x) + '\n')
         else:
             f.write(json.dumps(data) + '\n')
-
-
-def append_log(filename, data):
-    """
-    追加若干metainfo到log文件
-
-    :param filename: str log文件名
-    :param data: list|dict 一个metainfo字典或多个metainfo字典组成的列表
-    :return: 无
-    """
-    write_log(filename, data, mode='a+')
 
 
 def read_log(filename):
@@ -124,10 +113,7 @@ def get_jandan(target_page):
     :param target_page: 页面链接地址
     :return: list 其中链接为list，当前页数为int
     """
-    # http://jandan.net/zoo
 
-    # ua = UserAgent()
-    # headers = {'User-Agent': ua.random}
     headers = {'User-Agent': get_local_fake_useragent()}
     r = requests.get(target_page, headers=headers)
     r_bs = BeautifulSoup(r.text, features='lxml')
@@ -136,10 +122,7 @@ def get_jandan(target_page):
 
     current_page = r_bs.find('span', class_='current-comment-page').string
     current_page = str(current_page)
-    current_page = current_page.replace('[', '')
-    current_page = current_page.replace(']', '')
-    current_page = int(current_page)
-
+    current_page = int(current_page[1:-1])
     return [pic_links, current_page]
 
 
@@ -147,7 +130,7 @@ def get_jandan_next_page(current_page):
     # 从当前页码int推出下一页（其实是上一页）的地址
     # eg  http://jandan.net/zoo/MjAyMTAxMTgtMTE=#comments
     #     a = MjAyMTAxMTgtMTE=#comments
-    # 如果没有下一页，返回‘’
+    # 如果没有下一页，返回''
     if current_page > 1:
         current_page -= 1
     else:
