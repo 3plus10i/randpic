@@ -11,6 +11,7 @@ import base64
 import os
 import json
 import sys
+from tkinter import messagebox, Tk
 
 
 def metainfo_dict(url='', label='', downloaded=False, page_num=None):
@@ -286,8 +287,8 @@ def main(args=None):
         try:
             next_ = get_jandan_next_page(current_page)
         except Exception:
-            print('No more today')
-            time.sleep(2)
+            # print('No more today')
+            # time.sleep(2)
             return None
         [pic_links, current_page] = get_jandan(home + '/' + next_)
         pic_links = check(pic_links, data)
@@ -311,7 +312,10 @@ if __name__ == '__main__':
         vaild_label = ['zoo', 'ooxx', 'pic', 'top']
         if arg not in vaild_label:
             arg = None
-    arg = 'top'  # for debug
     file = main(arg)
     if file:
         os.startfile(file)
+    else:
+        root = Tk()
+        root.withdraw()
+        messagebox.showinfo('randpic', '已经...没有更多了\n明天再来看吧')
