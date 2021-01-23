@@ -14,97 +14,50 @@ import sys
 from tkinter import messagebox, Tk
 
 
-def metainfo_dict(url='', label='', downloaded=False, page_num=None):
+def write_cache(filename, cache={}, mode='w'):
     """
-    将元信息组装成dict
+    将metainfo写入cache文件
 
-    :param url: str 链接
-    :param label: str 文件所属的类别标签
-    :param downloaded: bool 是否已下载
-    :param page_num: int 下载时所在的页数
-    :return: dict metainfo字典
-    """
-    """
-    example_data = {
-        'time_stamp': 1611071754,
-        'date': '20210118',
-        'filename': r'007uWeI8ly1gms62b4278j30u00u0abu.jpg',
-        'url': r'http://wx3.sinaimg.cn/large/007uWeI8ly1gms62b4278j30u00u0abu.jpg',
-        'label': 'zoo'
-        'downloaded': True,
-        'page_num': 13,
-        'page_base64': 'MjAyMTAxMTgtMTE='
-    }
-    """
-    data = {
-        'time_stamp': int(time.time() * 10000000),
-        'data': time.strftime('%Y%m%d'),
-        'filename': url.split('/')[-1],
-        'url': url,
-        'label': label,
-        'downloaded': downloaded,
-        'page_num': page_num
-    }
-    # 暂时没什么用
-    # if page_num:
-    #     a = time.strftime('%Y%m%d')
-    #     a = a + '-' + str(page_num)
-    #     a = base64.b64encode(a.encode('utf8')).decode()
-    #     data['page_base64'] = a
-    # else:
-    #     data['page_base64'] = None
-    return data
-
-
-def write_log(filename, data, mode='w'):
-    """
-    将metainfo写入log文件
-
-    :param filename: str log文件名
-    :param data: list|dict 一个metainfo字典或多个metainfo字典组成的列表
+    :param filename: str cache文件名
+    :param cache: dict 一个metainfo字典
     :param mode: str 模式，默认覆写模式
     :return: 无
     """
     with open(filename, mode) as f:
-        if isinstance(data, list):
-            for x in data:
-                f.write(json.dumps(x) + '\n')
-        else:
-            f.write(json.dumps(data) + '\n')
+        f.write(json.dumps(cache))
 
 
-def read_log(filename):
+def read_cache(filename):
     """
-    读取log文件。在log过大时还会执行删除操作
+    读取cache文件。
 
-    :param filename: str log文件名
-    :return: 由metainfo字典组成的list
+    :param filename: str cache文件名
+    :return: dict
     """
-    data = []
+
+    cache = {}
     if os.path.exists(filename):
         with open(filename, "r", encoding="utf-8") as f:
-            raw = f.readlines()
-            if raw:
-                data = [json.loads(x) for x in raw]
-        new_data = flush_log(data)  # 检查log文件的大小，如果记录过多则删除若干最陈旧的记录
-        if new_data:
-            write_log(filename, new_data)
-            data = new_data
-    return data
+            raw = f.read()
+        if raw:
+            cache = json.loads(raw)
+    else:
+        with open(filename, mode='w', encoding='utf-8') as f:
+            f.write(json.dumps(cache))
+    return cache
 
-
-def flush_log(data, max_num=200):
+def get_inventory(label):
     """
-    检查log记录，如果条数过多则删除若干最陈旧的数据
-    最陈旧的数据浮于上方
-    这里如果考虑不同label的影响就太复杂了。没必要。直接删除前n-N条。
+    获取指定label文件夹下所有文件的文件名
 
-    :return:无
+    :param label: str 标签，即文件夹名
+    :return: list 文件名列表
     """
-    new_data = []
-    if len(data) > max_num:
-        new_data = data[len(data) - max_num:]
-    return new_data
+    path = './' + label
+    if not os.path.isdir(path):
+        return []
+    for dir_path, subpaths, files in os.walk(path):
+        return files
 
 
 def get_jandan(target_page):
@@ -123,7 +76,6 @@ def get_jandan(target_page):
 
     try:
         current_page = r_bs.find('span', class_='current-comment-page').string
-        current_page = str(current_page)
         current_page = int(current_page[1:-1])
     except Exception:
         current_page = 0
@@ -131,34 +83,39 @@ def get_jandan(target_page):
 
 
 def get_jandan_next_page(current_page):
-    # 从当前页码int推出下一页（其实是上一页）的地址
-    # eg  http://jandan.net/zoo/MjAyMTAxMTgtMTE=#comments
-    #     a = MjAyMTAxMTgtMTE=#comments
+    """
+    从当前页码int推出下一页（其实是上一页）的地址
+    eg  http://jandan.net/zoo/MjAyMTAxMTgtMTE=#comments
+        a = MjAyMTAxMTgtMTE=#comments
+
+    :param current_page: int
+    :return: str
+    """
+    #
     # 如果没有下一页，返回''
     if current_page > 1:
         current_page -= 1
     else:
         raise Exception('No more pages today.')
-        # return ''
     a = time.strftime('%Y%m%d')
     a = a + '-' + str(current_page)
     a = base64.b64encode(a.encode('utf8')).decode() + '#comments'
     return a
 
 
-def check(links, data):
+def check(links, inventory):
     """
-    检查给定的链接列表是否已经存在于metainfo中，并返回不存在其中的links
+    检查给定的文件链接列表是否已经存在于inventory列表中，并返回不存在其中的links
 
     :param links: 链接列表
-    :param data: metainfo元信息列表
+    :param inventory: 文件名列表
     :return: new_links
     """
-    data_urls = [x['url'] for x in data]
+    names = [x.split('/')[-1] for x in links]
     new_links = []
-    for x in links:
-        if x not in data_urls:
-            new_links.append(x)
+    for i in range(len(names)):
+        if names[i] not in inventory:
+            new_links.append(links[i])
     return new_links
 
 
@@ -191,7 +148,7 @@ def download(url, direc='.', filename=None, headers=None):
                 if chunk:
                     f.write(chunk)
                     f.flush()
-    return os.path.join(direc, filename)
+    return filename
 
 
 def get_local_fake_useragent():
@@ -249,7 +206,7 @@ def get_local_fake_useragent():
          'Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2225.0 Safari/537.36',
          'Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1985.67 Safari/537.36',
          'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36']
-    i = int(time.time()*1000) % len(a)
+    i = int(time.time() * 1000) % len(a)
     return a[i]
 
 
@@ -265,43 +222,43 @@ def main(args=None):
     if args:
         label = args
 
-    log = 'randpic.json'
-    # 先从记录里找可用的链接
-    data = read_log(log)
-    if data:
-        for i in range(len(data)):
-            x = data[i]
-            if x['label'] == label:
-                if not x['downloaded']:
-                    data[i]['downloaded'] = True
-                    write_log(log, data)
-                    target = x['url']
-                    file = download(target, direc='./' + label)
-                    return file
+    cache_file = 'randpic.json'
 
-    # 如果data里没有可用的链接
+    # 先用缓存链接
+    cache = read_cache(cache_file)
+    if cache and (label in cache.keys()) and cache[label] != []:
+        target = cache[label].pop()
+        write_cache(cache_file, cache)
+        file = download(target, direc=label)
+        return file
+
+    # 如果cache里没有可用的链接，就get一批
     home = 'http://jandan.net/' + label
     [pic_links, current_page] = get_jandan(home)
-    pic_links = check(pic_links, data)
+
+    # 检查重复
+    inventory = get_inventory(label)
+    pic_links = check(pic_links, inventory)
+
+    # 如果这批都已下载了
     while not pic_links:
         try:
-            next_ = get_jandan_next_page(current_page)
+            next_page = get_jandan_next_page(current_page)
         except Exception:
-            # print('No more today')
-            # time.sleep(2)
+            # 页面都抓完了就会返回None
             return None
-        [pic_links, current_page] = get_jandan(home + '/' + next_)
-        pic_links = check(pic_links, data)
+        [pic_links, current_page] = get_jandan(home + '/' + next_page)
+        pic_links = check(pic_links, inventory)
+
     # 终于找到了至少一个新链接
-    target = pic_links[0]
-    file = download(target, direc='./' + label)
-    new_data = metainfo_dict(pic_links[0], label=label, downloaded=True, page_num=current_page)
-    data.append(new_data)
-    if len(pic_links) > 1:
-        for x in pic_links[1:]:
-            new_data = metainfo_dict(x, label=label, downloaded=False, page_num=current_page)
-            data.append(new_data)
-    write_log(log, data)
+    target = pic_links.pop()
+    file = download(target, direc=label)
+    if label not in cache.keys():
+        cache[label] = pic_links
+    else:
+        cache[label].extend(pic_links)
+    write_cache(cache_file, cache)
+
     return file
 
 
